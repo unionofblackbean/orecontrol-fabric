@@ -2,11 +2,11 @@ plugins {
     id 'net.fabricmc.fabric-loom' version '1.17.21'
 }
 group = 'fi.dy.masa.orecontrol'
-version = '0.4.3-port.1+26.1.2'
+version = '0.4.3-port.2+26.1.2'
 base { archivesName = 'orecontrol-fabric' }
 dependencies {
     minecraft 'com.mojang:minecraft:26.1.2'
-    implementation 'net.fabricmc:fabric-loader:0.20.1'
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 }
 tasks.withType(JavaCompile).configureEach { options.release = 25 }
 java { withSourcesJar() }

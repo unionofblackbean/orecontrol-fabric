@@ -2,9 +2,11 @@
 
 基于 masa 的 Ore Control 0.4.3（原仓库提交 `6323cb359b21406395958f257c10de4298c19cbf`）。本移植由用户委托制作，修改于 2026-11-05，属于非官方移植，沿用 LGPL-3.0。原始仓库为 https://github.com/maruohon/orecontrol 。
 
+源码与发布地址为 https://github.com/unionofblackbean/orecontrol-fabric 。
+
 ## 安装与配置
 
-需要 Minecraft Java 26.1.2、Java 25 和 Fabric Loader 0.20.1 或更新兼容版本。将 `orecontrol-fabric-0.4.3-port.1+26.1.2.jar` 放入实例的 `mods` 文件夹。无需额外安装 Fabric API。专用服务器只需在服务器安装，单人游戏安装在客户端。
+需要 Minecraft Java 26.1.2、Java 25 和 Fabric Loader 0.18.4 或更新兼容版本。将 `orecontrol-fabric-0.4.3-port.2+26.1.2.jar` 放入实例的 `mods` 文件夹。无需额外安装 Fabric API。专用服务器只需在服务器安装，单人游戏安装在客户端。
 
 首次启动生成 `config/orecontrol/orecontrol.cfg`。在配置中把对应的 `B:disable…=false` 改为 `true`，下次服务器启动或单人世界重新打开时生效。全部开关默认关闭。修改影响后续生成的区块。
 
@@ -51,6 +53,12 @@ Minecraft 26.1.2 的地形算法与 1.12.2 已有很大变化，本移植保留�
 Fabric 没有 Forge 1.12.2 的 CUSTOM 事件。`Minable.disableCUSTOM` 使用上述现代矿物地物分类，`Decorate.disableCUSTOM` 与 `Populate.disableCUSTOM` 均阻止非 minecraft 命名空间的非矿物配置地物。这两个非矿物 CUSTOM 开关在本移植中作用相同。直接绕过配置地物系统写入世界的其他模组需要专门适配。
 
 测试覆盖原版配置地物、主世界和下界实际区块生成、旧配置读取和维度覆盖。未对全部第三方世界生成模组或图形客户端逐一验证，因此无法承诺任意整合包中的行为完全等同于旧 Forge 版。
+
+## Loader 兼容范围
+
+Loader 最低版本要求为 `>=0.18.4`。开发依赖默认使用 0.18.4，可通过 `"-Ploader_version=0.20.1"` 等参数切换测试用 Loader。Minecraft 版本要求为 26.1.2，Java 最低版本为 25。
+
+已分别在 Loader 0.18.4 与 0.20.1 上通过全部现有专用服务器集成测试，包含 41 项开关映射、动物生成拦截、主世界和下界实际区块生成。Loader 0.18.4 的旧 Mixin 子系统会输出 JAVA_25 兼容级别提示，本次测试完整通过。
 
 ## 构建与复现
 
