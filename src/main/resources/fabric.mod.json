@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "orecontrol",
+  "version": "${version}",
+  "name": "Ore Control (Fabric port)",
+  "description": "Controls ore generation, biome decoration and chunk population, with per-dimension configuration.",
+  "authors": ["masa (original author)", "Unofficial Fabric port"],
+  "license": "LGPL-3.0-only",
+  "environment": "*",
+  "entrypoints": {"main": ["fi.dy.masa.orecontrol.OreControl"]},
+  "mixins": ["orecontrol.mixins.json"],
+  "depends": {"fabricloader": ">=0.20.1", "minecraft": "26.1.2", "java": ">=25"}
+}

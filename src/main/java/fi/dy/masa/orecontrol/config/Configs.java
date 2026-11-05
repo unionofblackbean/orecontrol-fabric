@@ -1,182 +1,108 @@
 package fi.dy.masa.orecontrol.config;
 
-import java.io.File;
-import java.util.HashMap;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.minecraft.world.World;
-import net.minecraftforge.common.config.Configuration;
-import net.minecraftforge.common.config.Property;
-import net.minecraftforge.event.terraingen.DecorateBiomeEvent;
-import net.minecraftforge.event.terraingen.OreGenEvent;
-import net.minecraftforge.event.terraingen.PopulateChunkEvent;
-import fi.dy.masa.orecontrol.OreControl;
-import fi.dy.masa.orecontrol.reference.Reference;
-import gnu.trove.map.hash.TIntObjectHashMap;
 
-public class Configs
-{
-    private static final Pattern CONFIG_FILE_PATTERN = Pattern.compile(Reference.MOD_ID + "_dim(-?[0-9]+)\\.cfg");
-    private static final TIntObjectHashMap<Configs> DIM_CONFIGS = new TIntObjectHashMap<Configs>();
-    private static Configs masterConfig;
-    private boolean enablePerDimensionConfigs;
-    private boolean minablesDisableAllVanillaGeneration;
+/** Reads the original Forge boolean configuration format without a Forge dependency. */
+public final class Configs {
+    public static final Map<String, String> OPTIONS;
+    private static final Pattern CATEGORY = Pattern.compile("\\\"?([A-Za-z]+)\\\"?\\s*\\{");
+    private static final Pattern BOOLEAN = Pattern.compile("B:([A-Za-z0-9_]+)\\s*=\\s*(true|false)", Pattern.CASE_INSENSITIVE);
+    private static volatile Configs master = new Configs(Map.of());
+    private static volatile Map<String, Configs> dimensions = Map.of();
+    private final Map<String, Boolean> values;
 
-    private Map<OreGenEvent.GenerateMinable.EventType, Boolean> disabledMinables;
-    private Map<DecorateBiomeEvent.Decorate.EventType, Boolean> disabledDecorations;
-    private Map<PopulateChunkEvent.Populate.EventType, Boolean> disabledPopulations;
-
-    public boolean disableSurfaceLavaLakes;
-
-    private Configs(File configFile, boolean isMaster)
-    {
-        this.disabledMinables = new HashMap<OreGenEvent.GenerateMinable.EventType, Boolean>();
-        this.disabledDecorations = new HashMap<DecorateBiomeEvent.Decorate.EventType, Boolean>();
-        this.disabledPopulations = new HashMap<PopulateChunkEvent.Populate.EventType, Boolean>();
-        this.loadConfigs(configFile, isMaster);
+    static {
+        Map<String, String> options = new LinkedHashMap<>();
+        options.put("Generic", "enablePerDimensionConfigs");
+        options.put("Minable", "disableAllVanillaGeneration disableCOAL disableDIAMOND disableDIRT disableGOLD disableGRAVEL disableIRON disableLAPIS disableREDSTONE disableQUARTZ disableDIORITE disableGRANITE disableANDESITE disableEMERALD disableSILVERFISH disableCUSTOM disableCOPPER disableANCIENT_DEBRIS");
+        options.put("Decorate", "disableBIG_SHROOM disableCACTUS disableCLAY disableDEAD_BUSH disableDESERT_WELL disableLILYPAD disableFLOWERS disableFOSSIL disableGRASS disableICE disableLAKE_WATER disableLAKE_LAVA disablePUMPKIN disableREED disableROCK disableSAND disableSAND_PASS2 disableSHROOM disableTREE disableCUSTOM");
+        options.put("Populate", "disableDUNGEON disableFIRE disableGLOWSTONE disableICE disableLAKE disableLAVA disableNETHER_LAVA disableNETHER_LAVA2 disableNETHER_MAGMA disableANIMALS disableCUSTOM");
+        options.put("Custom", "disableSurfaceLavaLakes");
+        OPTIONS = Collections.unmodifiableMap(options);
     }
 
-    public static Configs get(World world)
-    {
-        int dimension = world.provider.getDimension();
-        Configs cfg = DIM_CONFIGS.get(dimension);
-
-        return cfg != null ? cfg : masterConfig;
+    private Configs(Map<String, Boolean> values) {
+        this.values = Map.copyOf(values);
     }
 
-    public static void readConfigs(File modConfigDir)
-    {
-        modConfigDir.mkdirs();
-        DIM_CONFIGS.clear();
-        masterConfig = new Configs(new File(modConfigDir, Reference.MOD_ID + ".cfg"), true);
+    public boolean enabled(String category, String key) {
+        return values.getOrDefault(category + "." + key, false);
+    }
 
-        if (masterConfig.enablePerDimensionConfigs)
-        {
-            for (File file : modConfigDir.listFiles())
-            {
-                Matcher matcher = CONFIG_FILE_PATTERN.matcher(file.getName());
+    public boolean disabled(String category, String type) {
+        return enabled(category, "disable" + type);
+    }
 
-                if (matcher.matches())
-                {
-                    try
-                    {
-                        int dimension = Integer.parseInt(matcher.group(1));
-                        DIM_CONFIGS.put(dimension, new Configs(file, false));
-                    }
-                    catch (NumberFormatException e)
-                    {
-                        OreControl.logger.warn("Failed to parse dimension id from config filename from '{}'", file.getName());
+    public static Configs get(String dimension) {
+        return dimensions.getOrDefault(dimension, master);
+    }
+
+    public static synchronized void load(Path directory) throws IOException {
+        Files.createDirectories(directory);
+        Configs nextMaster = read(directory.resolve("orecontrol.cfg"));
+        Map<String, Configs> nextDimensions = new LinkedHashMap<>();
+        if (nextMaster.enabled("Generic", "enablePerDimensionConfigs")) {
+            String[] ids = {"minecraft:overworld", "minecraft:the_nether", "minecraft:the_end"};
+            String[] legacy = {"0", "-1", "1"};
+            for (int i = 0; i < ids.length; i++) {
+                Path file = directory.resolve("orecontrol_dim" + legacy[i] + ".cfg");
+                if (Files.isRegularFile(file)) nextDimensions.put(ids[i], read(file));
+            }
+            Path root = directory.resolve("dimensions");
+            if (Files.isDirectory(root)) {
+                try (var paths = Files.walk(root)) {
+                    for (Path file : paths.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".cfg")).toList()) {
+                        String relative = root.relativize(file).toString().replace('\\', '/');
+                        int slash = relative.indexOf('/');
+                        if (slash > 0) {
+                            String id = relative.substring(0, slash) + ":" + relative.substring(slash + 1, relative.length() - 4);
+                            nextDimensions.put(id, read(file));
+                        }
                     }
                 }
             }
         }
+        dimensions = Map.copyOf(nextDimensions);
+        master = nextMaster;
     }
 
-    private void loadConfigs(File configFile, boolean isMaster)
-    {
-        OreControl.logger.info("Loading configuration from '{}'", configFile.getName());
-
-        Configuration conf = new Configuration(configFile, null, true);
-        conf.load();
-
-        Property prop;
-        String category;
-
-        if (isMaster)
-        {
-            category = "Generic";
-
-            prop = conf.get(category, "enablePerDimensionConfigs", false);
-            prop.setComment("If true, then per-dimension configs named like 'orecontrol_dim1.cfg' will override the master config, if they exist");
-            this.enablePerDimensionConfigs = prop.getBoolean();
-        }
-
-        category = "Minable";
-
-        prop = conf.get(category, "disableAllVanillaGeneration", false);
-        prop.setComment("Disables all vanilla generation of \"pockets-of-resources-inside-stone\". This includes all ores and also Dirt/Gravel/Andesite/Diorite/Granite, and since v0.3.1 also Emerald Ore and Silverfish blocks in Extreme Hills biomes.");
-        this.minablesDisableAllVanillaGeneration = prop.getBoolean();
-
-        this.disabledMinables.clear();
-
-        for (OreGenEvent.GenerateMinable.EventType type : OreGenEvent.GenerateMinable.EventType.values())
-        {
-            prop = conf.get(category, "disable" + type, false);
-            this.disabledMinables.put(type, prop.getBoolean());
-
-            String comment = COMMENTS_MINABLES.get(type);
-
-            if (comment != null)
-            {
-                prop.setComment(comment);
+    public static Configs read(Path file) throws IOException {
+        Map<String, Boolean> values = new LinkedHashMap<>();
+        if (Files.exists(file)) {
+            String category = "";
+            for (String raw : Files.readAllLines(file)) {
+                String line = raw.split("#", 2)[0].strip();
+                if (line.isEmpty()) continue;
+                var section = CATEGORY.matcher(line);
+                var property = BOOLEAN.matcher(line);
+                if (section.matches()) category = section.group(1);
+                else if (line.equals("}")) category = "";
+                else if (property.matches() && !category.isEmpty()) {
+                    values.put(category + "." + property.group(1), Boolean.parseBoolean(property.group(2)));
+                } else if (line.startsWith("B:")) {
+                    throw new IOException("Invalid boolean in " + file + ": " + line);
+                }
             }
         }
-
-        category = "Decorate";
-        this.disabledDecorations.clear();
-
-        for (DecorateBiomeEvent.Decorate.EventType type : DecorateBiomeEvent.Decorate.EventType.values())
-        {
-            prop = conf.get(category, "disable" + type, false);
-            this.disabledDecorations.put(type, prop.getBoolean());
+        boolean missing = OPTIONS.entrySet().stream().anyMatch(entry ->
+                java.util.Arrays.stream(entry.getValue().split(" ")).anyMatch(key -> !values.containsKey(entry.getKey() + "." + key)));
+        if (missing) {
+            StringBuilder text = new StringBuilder("# Ore Control Fabric 26.1.2. true disables the corresponding generation.\n# Per-dimension files fully override the master settings, as in the original mod.\n\n");
+            for (var entry : OPTIONS.entrySet()) {
+                text.append(entry.getKey()).append(" {\n");
+                for (String key : entry.getValue().split(" ")) {
+                    text.append("    B:").append(key).append('=').append(values.getOrDefault(entry.getKey() + "." + key, false)).append('\n');
+                }
+                text.append("}\n\n");
+            }
+            Files.writeString(file, text);
         }
-
-        category = "Populate";
-        this.disabledPopulations.clear();
-
-        for (PopulateChunkEvent.Populate.EventType type : PopulateChunkEvent.Populate.EventType.values())
-        {
-            prop = conf.get(category, "disable" + type, false);
-            this.disabledPopulations.put(type, prop.getBoolean());
-        }
-
-        category = "Custom";
-
-        prop = conf.get(category, "disableSurfaceLavaLakes", false, "Disable lava lakes on the surface.\nThis disables all lava lakes via the vanilla code, and tries to\n generate the underground lakes via the mod code.");
-        this.disableSurfaceLavaLakes = prop.getBoolean();
-
-        if (conf.hasChanged())
-        {
-            conf.save();
-        }
-    }
-
-    public boolean minablesDisableAllVanillaGeneration()
-    {
-        return this.minablesDisableAllVanillaGeneration;
-    }
-
-    public boolean minableIsDisabled(OreGenEvent.GenerateMinable.EventType type)
-    {
-        Boolean value = this.disabledMinables.get(type);
-        return value != null && value.booleanValue();
-    }
-
-    public boolean decorationIsDisabled(DecorateBiomeEvent.Decorate.EventType type)
-    {
-        Boolean value = this.disabledDecorations.get(type);
-        return value != null && value.booleanValue();
-    }
-
-    public boolean populationIsDisabled(PopulateChunkEvent.Populate.EventType type)
-    {
-        Boolean value = this.disabledPopulations.get(type);
-        return value != null && value.booleanValue();
-    }
-
-    private static final Map<OreGenEvent.GenerateMinable.EventType, String> COMMENTS_MINABLES
-        = new HashMap<OreGenEvent.GenerateMinable.EventType, String>();
-
-    static
-    {
-        COMMENTS_MINABLES.put(OreGenEvent.GenerateMinable.EventType.ANDESITE, "Disables Andesite pocket generation inside regular stone.");
-        COMMENTS_MINABLES.put(OreGenEvent.GenerateMinable.EventType.CUSTOM, "Disables custom ore generation. NOTE: Very few mods seem to actually use the OreGenEvent.GenerateMinable event though, and this only works with those that do.");
-        COMMENTS_MINABLES.put(OreGenEvent.GenerateMinable.EventType.DIORITE, "Disables Diorite pocket generation inside regular stone.");
-        COMMENTS_MINABLES.put(OreGenEvent.GenerateMinable.EventType.DIRT, "Disables Dirt pocket generation inside stone.");
-        COMMENTS_MINABLES.put(OreGenEvent.GenerateMinable.EventType.EMERALD, "Disables Emerald Ore generation (in Extreme Hills biomes).");
-        COMMENTS_MINABLES.put(OreGenEvent.GenerateMinable.EventType.GRANITE, "Disables Granite pocket generation inside regular stone.");
-        COMMENTS_MINABLES.put(OreGenEvent.GenerateMinable.EventType.GRAVEL, "Disables Gravel pocket generation inside stone.");
-        COMMENTS_MINABLES.put(OreGenEvent.GenerateMinable.EventType.SILVERFISH, "Disables Silverfish block (= Monster Egg) generation (in Extreme Hills biomes).");
+        return new Configs(values);
     }
 }
