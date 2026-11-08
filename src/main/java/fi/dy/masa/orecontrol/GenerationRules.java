@@ -19,6 +19,7 @@ import net.minecraft.world.level.levelgen.feature.stateproviders.SimpleStateProv
 
 import java.util.List;
 import java.util.Map;
+import net.minecraft.world.level.levelgen.GenerationStep;
 
 public final class GenerationRules {
     private static final Map<String, String> DECORATIONS = Map.ofEntries(
@@ -41,6 +42,7 @@ public final class GenerationRules {
         // Natural generation uses a region. Commands and sapling/bone-meal growth use ServerLevel.
         if (!(level instanceof WorldGenRegion)) return false;
         Configs config = Configs.get(level.getLevel().dimension().identifier().toString());
+        if (config.disabled("Stages", "ALL")) return true;
         Identifier id = level.registryAccess().lookupOrThrow(Registries.CONFIGURED_FEATURE).getKey(configured);
         Identifier type = BuiltInRegistries.FEATURE.getKey(configured.feature());
         return disabled(configured, config, id, type, level, pos);
@@ -48,6 +50,7 @@ public final class GenerationRules {
 
     public static boolean disabled(ConfiguredFeature<?, ?> configured, Configs config, Identifier id,
                                    Identifier type, WorldGenLevel level, BlockPos pos) {
+        if (config.disabled("Stages", "ALL")) return true;
         List<OreConfiguration.TargetBlockState> targets = switch (configured.config()) {
             case OreConfiguration ore -> ore.targetStates;
             case ReplaceBlockConfiguration replacement -> replacement.targetStates;
@@ -74,6 +77,8 @@ public final class GenerationRules {
         };
         if (path.startsWith("flower_")) decoration = "FLOWERS";
         if (decoration != null && config.disabled("Decorate", decoration)) return true;
+        String modern = ModernFeatures.group(path, feature);
+        if (modern != null && config.disabled("Decorate", modern)) return true;
         if (feature.equals("freeze_top_layer")) return config.disabled("Populate", "ICE");
         if (feature.equals("monster_room")) return config.disabled("Populate", "DUNGEON");
         if (feature.equals("glowstone_blob")) return config.disabled("Populate", "GLOWSTONE");
@@ -101,6 +106,12 @@ public final class GenerationRules {
         // Fabric has no Forge CUSTOM event. Apply these switches to mod-owned non-ore features.
         return id != null && !id.getNamespace().equals("minecraft")
             && (config.disabled("Decorate", "CUSTOM") || config.disabled("Populate", "CUSTOM"));
+    }
+
+    public static boolean stageDisabled(Configs config, int step) {
+        if (config.disabled("Stages", "ALL")) return true;
+        var steps = GenerationStep.Decoration.values();
+        return step >= 0 && step < steps.length && config.disabled("Stages", steps[step].name());
     }
 
     private static String oreType(String block) {

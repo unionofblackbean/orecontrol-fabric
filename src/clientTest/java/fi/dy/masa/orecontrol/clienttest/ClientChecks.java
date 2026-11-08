@@ -56,6 +56,34 @@ public final class ClientChecks {
                     press(client.screen, "保存并应用");
                     check(Configs.get(client.level.dimension().identifier().toString()).disabled("Decorate", "GRASS"), "dimension changes applied immediately");
                     client.setScreen(new OreControlConfigScreen(new TitleScreen()));
+                    press(client.screen, "▶");
+                    stage = 7; wait = 25;
+                }
+                case 7 -> {
+                    capture(client, "modern-vegetation-zh.png");
+                    press(client.screen, "阶段");
+                    stage = 8; wait = 25;
+                }
+                case 8 -> {
+                    capture(client, "stages-zh.png");
+                    press(client.screen, "本类全部禁止");
+                    press(client.screen, "保存并应用");
+                    check(Configs.get(client.level.dimension().identifier().toString()).disabled("Stages", "ALL"), "bulk stage blocking saved");
+                    client.setScreen(new OreControlConfigScreen(new TitleScreen()));
+                    press(client.screen, "阶段");
+                    press(client.screen, "本类全部允许");
+                    press(client.screen, "保存并应用");
+                    check(!Configs.get(client.level.dimension().identifier().toString()).disabled("Stages", "ALL"), "bulk stage allowing saved");
+                    client.setScreen(new OreControlConfigScreen(new TitleScreen()));
+                    press(client.screen, "表层");
+                    stage = 9; wait = 25;
+                }
+                case 9 -> {
+                    capture(client, "surface-zh.png");
+                    press(client.screen, "泥土类表层");
+                    press(client.screen, "保存并应用");
+                    check(Configs.get(client.level.dimension().identifier().toString()).disabled("Surface", "DIRT"), "surface soil button saved");
+                    client.setScreen(new OreControlConfigScreen(new TitleScreen()));
                     press(client.screen, "选择重建范围");
                     check(client.screen instanceof RebuildChunksScreen, "rebuild range screen opens");
                     wait = 25; stage = 3;

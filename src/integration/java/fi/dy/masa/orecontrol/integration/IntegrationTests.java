@@ -47,6 +47,7 @@ public final class IntegrationTests {
             testSettingsSave();
             testRegionReset();
             testRules(server.overworld());
+            RESULTS.addAll(ModernGenerationChecks.run(server));
             testOtherRules(server);
             testAnimalHook(server.overworld());
             testGeneration(server);

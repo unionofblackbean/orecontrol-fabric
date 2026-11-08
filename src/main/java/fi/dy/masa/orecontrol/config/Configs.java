@@ -18,20 +18,26 @@ public final class Configs {
     private record Snapshot(Configs master, Map<String, Configs> dimensions) {}
     private static volatile Snapshot snapshot = new Snapshot(new Configs(Map.of()), Map.of());
     private final Map<String, Boolean> values;
+    private final boolean disabledDecorations;
 
     static {
         Map<String, String> options = new LinkedHashMap<>();
         options.put("Generic", "enablePerDimensionConfigs allowExistingChunkRebuild");
-        options.put("Minable", "disableAllVanillaGeneration disableCOAL disableDIAMOND disableDIRT disableGOLD disableGRAVEL disableIRON disableLAPIS disableREDSTONE disableQUARTZ disableDIORITE disableGRANITE disableANDESITE disableEMERALD disableSILVERFISH disableCUSTOM disableCOPPER disableANCIENT_DEBRIS");
-        options.put("Decorate", "disableBIG_SHROOM disableCACTUS disableCLAY disableDEAD_BUSH disableDESERT_WELL disableLILYPAD disableFLOWERS disableFOSSIL disableGRASS disableICE disableLAKE_WATER disableLAKE_LAVA disablePUMPKIN disableREED disableROCK disableSAND disableSAND_PASS2 disableSHROOM disableTREE disableCUSTOM");
+        options.put("Minable", "disableAllVanillaGeneration disableCOAL disableDIAMOND disableDIRT disableGOLD disableGRAVEL disableIRON disableLAPIS disableREDSTONE disableQUARTZ disableDIORITE disableGRANITE disableANDESITE disableEMERALD disableSILVERFISH disableCUSTOM disableCOPPER disableANCIENT_DEBRIS disableTUFF disableCLAY disableBLACKSTONE disableSOUL_SAND");
+        options.put("Decorate", "disableBIG_SHROOM disableCACTUS disableCLAY disableDEAD_BUSH disableDESERT_WELL disableLILYPAD disableFLOWERS disableFOSSIL disableGRASS disableICE disableLAKE_WATER disableLAKE_LAVA disablePUMPKIN disableREED disableROCK disableSAND disableSAND_PASS2 disableSHROOM disableTREE disableCUSTOM disableBAMBOO disableSEAGRASS disableKELP disableSEA_PICKLE disableCORAL disableVINES disableCAVE_VINES disableNETHER_VINES disableBERRIES disableBUSH disableFIREFLY_BUSH disableLEAF_LITTER disableMELON disableMOSS disableDRIPLEAF disableCAVE_CLAY disableSPORE_BLOSSOM disableROOTS disableNETHER_VEGETATION disableCHORUS disableLICHEN disableSCULK disableDRIPSTONE disableGEODE disableBASALT disableBLACKSTONE_BLOBS disableDELTA disableICEBERG disableBLUE_ICE disableUNDERWATER_MAGMA disableEND_ISLAND disableEND_SPIKE disableEND_GATEWAY disableEND_PLATFORM disableBLOCK_PILES disableDIRT_DISK");
         options.put("Populate", "disableDUNGEON disableFIRE disableGLOWSTONE disableICE disableLAKE disableLAVA disableNETHER_LAVA disableNETHER_LAVA2 disableNETHER_MAGMA disableANIMALS disableCUSTOM");
         options.put("Custom", "disableSurfaceLavaLakes");
+        options.put("Stages", "disableALL disableRAW_GENERATION disableLAKES disableLOCAL_MODIFICATIONS disableUNDERGROUND_STRUCTURES disableSURFACE_STRUCTURES disableSTRONGHOLDS disableUNDERGROUND_ORES disableUNDERGROUND_DECORATION disableFLUID_SPRINGS disableVEGETAL_DECORATION disableTOP_LAYER_MODIFICATION");
+        options.put("Surface", "disableDIRT disableFROZEN_OCEAN disableBADLANDS_PILLARS");
         OPTIONS = Collections.unmodifiableMap(options);
     }
 
     private Configs(Map<String, Boolean> values) {
         this.values = Map.copyOf(values);
+        this.disabledDecorations = values.entrySet().stream().anyMatch(e -> e.getKey().startsWith("Decorate.disable") && e.getValue());
     }
+
+    public boolean hasDisabledDecorations() { return disabledDecorations; }
 
     public boolean enabled(String category, String key) {
         return values.getOrDefault(category + "." + key, false);

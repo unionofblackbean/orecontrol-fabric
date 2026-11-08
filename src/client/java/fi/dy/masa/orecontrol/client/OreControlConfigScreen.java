@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class OreControlConfigScreen extends Screen {
-    private static final List<String> CATEGORIES = List.of("Decorate", "Minable", "Populate", "Custom", "Generic");
+    private static final List<String> CATEGORIES = List.of("Decorate", "Minable", "Populate", "Stages", "Surface", "Custom", "Generic");
     private final Screen parent;
     private final Map<String, Boolean> master = new LinkedHashMap<>(Configs.master().settings());
     private final Map<String, Boolean> dimensionSettings;
@@ -54,7 +54,7 @@ public final class OreControlConfigScreen extends Screen {
                 category = index;
                 page = 0;
                 rebuildWidgets();
-            }).bounds(left + i * 61, 53, 56, 20).build());
+            }).bounds(left + i * (300 / CATEGORIES.size()), 53, 300 / CATEGORIES.size() - 2, 20).build());
             tab.active = category != i;
         }
         String section = CATEGORIES.get(category);
@@ -81,6 +81,15 @@ public final class OreControlConfigScreen extends Screen {
             Button next = addRenderableWidget(Button.builder(Component.literal("▶"), b -> { page++; rebuildWidgets(); }).bounds(left + 265, height - 102, 35, 18).build());
             next.active = (page + 1) * capacity < keys.size();
         }
+        if (!section.equals("Generic") && !section.equals("Custom")) {
+            for (boolean disabled : List.of(false, true)) {
+                addRenderableWidget(Button.builder(Component.translatable(disabled ? "orecontrol.all.block" : "orecontrol.all.allow"), b -> {
+                    for (String key : keys) draft().put(section + "." + key, disabled);
+                    if (dimensionTarget) dimensionDirty = true;
+                    rebuildWidgets();
+                }).bounds(left + (disabled ? 155 : 42), height - 102, 103, 18).build());
+            }
+        }
         addRenderableWidget(Button.builder(overwriteLabel(), b -> {
             master.put("Generic.allowExistingChunkRebuild", !master.getOrDefault("Generic.allowExistingChunkRebuild", false));
             rebuildWidgets();
@@ -98,7 +107,9 @@ public final class OreControlConfigScreen extends Screen {
         boolean value = draft().getOrDefault(section + "." + key, false);
         Component state = Component.translatable((section.equals("Generic") || section.equals("Custom"))
                 ? (value ? "orecontrol.on" : "orecontrol.off") : (value ? "orecontrol.disabled" : "orecontrol.allowed"));
-        return Component.translatable("orecontrol.option", Component.translatable("orecontrol.setting." + key), state);
+        String prefix = section.equals("Stages") || section.equals("Surface") || (section.equals("Minable") && key.equals("disableCLAY"))
+                ? "orecontrol.setting." + section + "." : "orecontrol.setting.";
+        return Component.translatable("orecontrol.option", Component.translatable(prefix + key), state);
     }
 
     private Component overwriteLabel() {
@@ -124,7 +135,7 @@ public final class OreControlConfigScreen extends Screen {
         super.extractRenderState(graphics, x, y, delta);
         graphics.centeredText(font, title, width / 2, 12, 0xFFFFFFFF);
         graphics.centeredText(font, Component.translatable(minecraft.level != null && minecraft.getSingleplayerServer() == null
-                ? "orecontrol.remote.help" : "orecontrol.help"), width / 2, height - 53, 0xFFAAAAAA);
+                ? "orecontrol.remote.help" : CATEGORIES.get(category).equals("Stages") ? "orecontrol.stages.help" : "orecontrol.help"), width / 2, height - 53, 0xFFAAAAAA);
         if (!status.isEmpty()) graphics.centeredText(font, status, width / 2, height - 40, 0xFFFF7777);
         if (dimensionTarget && CATEGORIES.get(category).equals("Generic")) {
             graphics.centeredText(font, Component.translatable("orecontrol.global_only"), width / 2, 90, 0xFFAAAAAA);

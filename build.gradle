@@ -2,7 +2,7 @@ plugins {
     id 'net.fabricmc.fabric-loom' version '1.17.21'
 }
 group = 'fi.dy.masa.orecontrol'
-version = '1.0.0+mc26.1.2'
+version = '1.1.0+mc26.1.2'
 base { archivesName = 'orecontrol-fabric' }
 repositories { maven { url = 'https://maven.terraformersmc.com/releases/' } }
 dependencies {
@@ -100,7 +100,40 @@ tasks.named('runIntegrationServer') {
         run.mkdirs()
         new File(run, 'eula.txt').text = 'eula=true\n'
         new File(run, 'test-results.txt').delete()
-        new File(run, 'server.properties').text = 'online-mode=false\nserver-ip=127.0.0.1\nlevel-seed=424242\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nserver-port=0\nmax-tick-time=-1\nlevel-name=world-' + System.currentTimeMillis() + '\n'
+        def worldName = 'world-' + System.currentTimeMillis()
+        new File(run, 'server.properties').text = 'online-mode=false\nserver-ip=127.0.0.1\nlevel-seed=424242\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nserver-port=0\nmax-tick-time=-1\nlevel-name=' + worldName + '\n'
+        def pack = new File(run, worldName + '/datapacks/orecontrol-tests')
+        def json = { String path, Object value ->
+            def target = new File(pack, path)
+            target.parentFile.mkdirs()
+            target.text = groovy.json.JsonOutput.toJson(value)
+        }
+        json('pack.mcmeta', [pack: [description: 'Ore Control generation fixtures', min_format: [101, 1], max_format: [101, 1]]])
+        def gameJar = sourceSets.main.runtimeClasspath.files.find { it.name.startsWith('minecraft-common') }
+        def zip = new java.util.zip.ZipFile(gameJar)
+        try {
+            ['jungle': 'bamboo_jungle', 'ocean': 'lukewarm_ocean', 'coral': 'warm_ocean', 'forest': 'forest'].each { name, biome ->
+                def data = new groovy.json.JsonSlurper().parseText(zip.getInputStream(zip.getEntry('data/minecraft/worldgen/biome/' + biome + '.json')).text)
+                if (name == 'coral') {
+                    data.features[9].add('fixtures:dense_pickles')
+                    data.features[9].add('fixtures:inline_coral')
+                }
+                if (name == 'forest') {
+                    data.features[9].add('fixtures:vine_tree')
+                    data.features[9].add('fixtures:dense_moss')
+                }
+                json('data/fixtures/worldgen/biome/' + name + '.json', data)
+                def layers = [[height: 1, block: 'minecraft:bedrock'], [height: 40, block: 'minecraft:stone']]
+                layers += ['jungle', 'forest'].contains(name) ? [[height: 3, block: 'minecraft:dirt'], [height: 1, block: 'minecraft:grass_block']]
+                        : [[height: 3, block: 'minecraft:sand'], [height: 12, block: 'minecraft:water']]
+                json('data/fixtures/dimension/' + name + '.json', [type: 'minecraft:overworld', generator: [type: 'minecraft:flat', settings: [biome: 'fixtures:' + name, features: true, lakes: false, structure_overrides: [], layers: layers]]])
+            }
+            def placement = [[type: 'minecraft:count', count: 64], [type: 'minecraft:in_square'], [type: 'minecraft:heightmap', heightmap: 'OCEAN_FLOOR_WG'], [type: 'minecraft:biome']]
+            json('data/fixtures/worldgen/placed_feature/dense_pickles.json', [feature: 'minecraft:sea_pickle', placement: placement])
+            json('data/fixtures/worldgen/placed_feature/inline_coral.json', [feature: [type: 'minecraft:coral_tree', config: [:]], placement: placement])
+            json('data/fixtures/worldgen/placed_feature/dense_moss.json', [feature: 'minecraft:moss_vegetation', placement: [[type: 'minecraft:count', count: 256], [type: 'minecraft:in_square'], [type: 'minecraft:heightmap', heightmap: 'WORLD_SURFACE_WG'], [type: 'minecraft:biome']]])
+            json('data/fixtures/worldgen/placed_feature/vine_tree.json', [feature: 'minecraft:jungle_tree', placement: [[type: 'minecraft:count', count: 64], [type: 'minecraft:in_square'], [type: 'minecraft:heightmap', heightmap: 'WORLD_SURFACE_WG'], [type: 'minecraft:biome']]])
+        } finally { zip.close() }
     }
     doLast {
         def result = file('build/integration-run/test-results.txt')
