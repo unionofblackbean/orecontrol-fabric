@@ -2,8 +2,9 @@ plugins {
     id 'net.fabricmc.fabric-loom' version '1.17.21'
 }
 group = 'fi.dy.masa.orecontrol'
-version = '0.4.3-port.2+26.1.2'
+version = '1.0.0+mc26.1.2'
 base { archivesName = 'orecontrol-fabric' }
+repositories { maven { url = 'https://maven.terraformersmc.com/releases/' } }
 dependencies {
     minecraft 'com.mojang:minecraft:26.1.2'
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -23,8 +24,11 @@ sourceSets {
     }
 }
 loom {
+    interfaceInjection { isEnabled = false }
+    enableTransitiveAccessWideners = false
+    splitEnvironmentSourceSets()
     mods {
-        orecontrol { sourceSet sourceSets.main }
+        orecontrol { sourceSet sourceSets.main; sourceSet sourceSets.client }
         orecontrol_tests { sourceSet sourceSets.integration }
     }
     runs {
@@ -33,6 +37,61 @@ loom {
             source sourceSets.integration
             runDir 'build/integration-run'
         }
+        regenerationServer {
+            server()
+            source sourceSets.integration
+            runDir 'build/integration-run'
+            vmArg '-Dorecontrol.reopenTest=true'
+        }
+    }
+}
+tasks.named('runRegenerationServer') {
+    dependsOn 'runIntegrationServer'
+    doFirst { file('build/integration-run/reopen-test-results.txt').delete() }
+    doLast {
+        def result = file('build/integration-run/reopen-test-results.txt')
+        if (!result.exists() || !result.text.contains('REGENERATION_PASSED')) throw new GradleException('World regeneration checks failed')
+    }
+}
+dependencies {
+    clientCompileOnly 'com.terraformersmc:modmenu:18.0.2'
+    clientRuntimeOnly 'com.terraformersmc:modmenu:18.0.2'
+}
+sourceSets {
+    clientTest {
+        compileClasspath += sourceSets.client.compileClasspath + sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+}
+loom {
+    mods { orecontrol_client_tests { sourceSet sourceSets.clientTest } }
+    runs {
+        clientTest {
+            client()
+            source sourceSets.clientTest
+            runDir 'build/client-run'
+            programArgs '--width', '1100', '--height', '740'
+        }
+    }
+}
+tasks.named('runClientTest') {
+    dependsOn 'runRegenerationServer'
+    doFirst {
+        def run = file('build/client-run')
+        run.mkdirs()
+        new File(run, 'client-test-results.txt').delete()
+        new File(run, 'options.txt').text = 'lang:zh_cn\nguiScale:2\nautoJump:false\n'
+        def config = new File(run, 'config/orecontrol/orecontrol.cfg')
+        config.parentFile.mkdirs()
+        config.text = ''
+        def source = file('build/integration-run').listFiles().findAll { it.directory && it.name.startsWith('world-') }.max { it.lastModified() }
+        def name = 'client-test-' + System.currentTimeMillis()
+        copy { from source; into new File(run, 'saves/' + name) }
+        new File(run, 'test-world-name.txt').text = name
+    }
+    doLast {
+        def result = file('build/client-run/client-test-results.txt')
+        if (!result.exists() || !result.text.contains('ALL_CLIENT_CHECKS_PASSED')) throw new GradleException('Client UI checks failed')
     }
 }
 tasks.named('runIntegrationServer') {
@@ -48,5 +107,14 @@ tasks.named('runIntegrationServer') {
         if (!result.exists() || !result.text.contains('PASS: all checks completed')) {
             throw new GradleException('Integration tests failed. See build/integration-run/test-results.txt and integration.log.')
         }
+        def target = file('build/integration-run/shutdown-reset-target.txt')
+        if (!target.exists()) throw new GradleException('Shutdown reset target was not recorded')
+        def region = new RandomAccessFile(new File(target.text.trim()), 'r')
+        try {
+            region.seek(4L * (8 + 8 * 32))
+            if (region.readInt() != 0) throw new GradleException('Shutdown reset did not clear the selected chunk')
+            region.seek(4L * (9 + 8 * 32))
+            if (region.readInt() == 0) throw new GradleException('Shutdown reset damaged the neighboring chunk')
+        } finally { region.close() }
     }
 }

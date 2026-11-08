@@ -7,7 +7,11 @@
   "authors": ["masa (original author)", "Unofficial Fabric port"],
   "license": "LGPL-3.0-only",
   "environment": "*",
-  "entrypoints": {"main": ["fi.dy.masa.orecontrol.OreControl"]},
+  "entrypoints": {
+    "main": ["fi.dy.masa.orecontrol.OreControl"],
+    "modmenu": ["fi.dy.masa.orecontrol.client.OreControlModMenu"]
+  },
+  "suggests": {"modmenu": ">=18.0.0"},
   "mixins": ["orecontrol.mixins.json"],
   "depends": {"fabricloader": ">=0.18.4", "minecraft": "26.1.2", "java": ">=25"}
 }

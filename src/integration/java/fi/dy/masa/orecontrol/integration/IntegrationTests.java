@@ -3,6 +3,14 @@ package fi.dy.masa.orecontrol.integration;
 import fi.dy.masa.orecontrol.GenerationRules;
 import fi.dy.masa.orecontrol.OreControl;
 import fi.dy.masa.orecontrol.config.Configs;
+import fi.dy.masa.orecontrol.reset.RegionReset;
+import fi.dy.masa.orecontrol.reset.WorldReset;
+import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.storage.LevelResource;
+import java.io.RandomAccessFile;
+import java.util.Arrays;
+import java.util.Map;
+import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -32,13 +40,17 @@ public final class IntegrationTests {
     private static final Path CONFIG = FabricLoader.getInstance().getConfigDir().resolve("orecontrol");
 
     public static void run(MinecraftServer server) {
+        if (Boolean.getBoolean("orecontrol.reopenTest")) { testReopenedWorld(server); return; }
         try {
             Files.deleteIfExists(Path.of("test-results.txt"));
             testConfig();
+            testSettingsSave();
+            testRegionReset();
             testRules(server.overworld());
             testOtherRules(server);
             testAnimalHook(server.overworld());
             testGeneration(server);
+            testShutdownReset(server);
             RESULTS.add("PASS: all checks completed");
             Files.write(Path.of("test-results.txt"), RESULTS);
             System.out.println("ORECONTROL_INTEGRATION_PASS " + RESULTS);
@@ -64,6 +76,113 @@ public final class IntegrationTests {
         check(rejected, "invalid boolean rejected");
         Files.delete(file);
         RESULTS.add("PASS: original CFG parsing, defaults, round-trip and malformed-value checks");
+    }
+
+    private static void testSettingsSave() throws Exception {
+        Path directory = Files.createTempDirectory(Path.of("."), "config-save-test-");
+        Map<String, Boolean> master = new java.util.LinkedHashMap<>(Configs.master().settings());
+        master.put("Generic.allowExistingChunkRebuild", true);
+        master.put("Decorate.disableTREE", true);
+        Configs.saveSettings(directory, master, null, Map.of());
+        check(Configs.master().enabled("Generic", "allowExistingChunkRebuild"), "overwrite preference persisted");
+        check(Configs.get("minecraft:overworld").disabled("Decorate", "TREE"), "live global settings applied");
+        Configs.saveSettings(directory, master, "minecraft:overworld", Map.of("Decorate.disableGRASS", true));
+        check(Configs.master().enabled("Generic", "enablePerDimensionConfigs"), "editing dimension enables overrides");
+        check(Configs.get("minecraft:overworld").disabled("Decorate", "GRASS"), "live dimension settings applied");
+        check(!Configs.get("minecraft:overworld").disabled("Decorate", "TREE"), "dimension fully overrides global");
+        OreControl.reload();
+        RESULTS.add("PASS: atomic live settings save, overwrite preference and dimension editing");
+    }
+
+    private static void testRegionReset() throws Exception {
+        Path world = Files.createTempDirectory(Path.of("."), "reset-file-test-").toAbsolutePath();
+        Path dimension = world.resolve("dimensions/minecraft/overworld");
+        Map<Path, byte[]> originals = new java.util.LinkedHashMap<>();
+        for (String folder : List.of("region", "entities", "poi")) {
+            Path file = dimension.resolve(folder).resolve("r.-1.-1.mca");
+            Files.createDirectories(file.getParent());
+            byte[] content = new byte[16384];
+            Arrays.fill(content, 8192, content.length, (byte) 77);
+            Files.write(file, content);
+            try (RandomAccessFile region = new RandomAccessFile(file.toFile(), "rw")) {
+                region.seek(4L * (31 + 31 * 32)); region.writeInt(513);
+                region.seek(4L * (30 + 31 * 32)); region.writeInt(769);
+            }
+            originals.put(file, Files.readAllBytes(file));
+        }
+        Path external = dimension.resolve("region/c.-1.-1.mcc");
+        Files.writeString(external, "external chunk data");
+        originals.put(external, Files.readAllBytes(external));
+        Path untouched = dimension.resolve("region/r.0.0.mca");
+        Files.write(untouched, new byte[8192]);
+        Files.createDirectories(dimension.resolve("entities"));
+        Files.write(dimension.resolve("entities/r.0.0.mca"), new byte[0]);
+        var result = RegionReset.reset(world, dimension, new RegionReset.Selection(-1, -1, -1, -1));
+        check(result.chunks() == 1 && result.backup() != null, "one negative-coordinate chunk selected");
+        check(RegionReset.latestSelections(world).get("minecraft:overworld").contains(-1, -1), "rebuild boundary recorded");
+        for (var original : originals.entrySet()) {
+            Path backupFile = result.backup().resolve(world.relativize(original.getKey()));
+            check(Arrays.equals(original.getValue(), Files.readAllBytes(backupFile)), "backup bytes match " + original.getKey());
+            if (original.getKey().equals(external)) continue;
+            check(!RegionReset.hasChunk(original.getKey(), -1, -1), "selected chunk cleared");
+            check(RegionReset.hasChunk(original.getKey(), -2, -1), "neighbor retained");
+            byte[] expected = original.getValue().clone();
+            int offset = 4 * (31 + 31 * 32);
+            Arrays.fill(expected, offset, offset + 4, (byte) 0);
+            Arrays.fill(expected, 4096 + offset, 4100 + offset, (byte) 0);
+            check(Arrays.equals(expected, Files.readAllBytes(original.getKey())), "only selected region headers changed");
+        }
+        check(!Files.exists(external), "selected external chunk removed after backup");
+        check(Arrays.equals(Files.readAllBytes(untouched), new byte[8192]), "other region untouched");
+        Path manifest = result.backup().resolve("manifest.json");
+        var journal = JsonParser.parseString(Files.readString(manifest)).getAsJsonObject();
+        journal.addProperty("state", "PREPARED");
+        Files.writeString(manifest, journal.toString());
+        RegionReset.recoverInterrupted(world);
+        for (var original : originals.entrySet()) {
+            check(Arrays.equals(original.getValue(), Files.readAllBytes(original.getKey())), "interrupted reset restored " + original.getKey());
+        }
+        check(RegionReset.reset(world, dimension, new RegionReset.Selection(4, 4, 4, 4)).chunks() == 0, "unbuilt selection is a no-op");
+        boolean limited = false;
+        try { new RegionReset.Selection(0, 0, 32, 32); } catch (IllegalArgumentException expected) { limited = true; }
+        check(limited, "oversized selection rejected");
+        RESULTS.add("PASS: selective terrain/entity/POI reset, negative coordinates, external chunks, exact backups, neighbor preservation and interrupted-operation recovery");
+    }
+
+    private static void testShutdownReset(MinecraftServer server) throws Exception {
+        var world = server.getWorldPath(LevelResource.ROOT);
+        var dimension = DimensionType.getStorageFolder(Level.OVERWORLD, world);
+        server.overworld().setBlock(new BlockPos(640, 200, 640), Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+        server.overworld().setBlock(new BlockPos(656, 200, 640), Blocks.EMERALD_BLOCK.defaultBlockState(), 3);
+        Files.writeString(CONFIG.resolve("orecontrol.cfg"), "Generic {\n B:allowExistingChunkRebuild=true\n}\nMinable {\n B:disableAllVanillaGeneration=true\n}\nDecorate {\n B:disableTREE=true\n B:disableGRASS=true\n}\n");
+        OreControl.reload();
+        WorldReset.queue(server, Level.OVERWORLD, new RegionReset.Selection(40, 40, 40, 40));
+        Files.writeString(Path.of("shutdown-reset-target.txt"), dimension.resolve("region/r.1.1.mca").toAbsolutePath().toString());
+        RESULTS.add("PASS: real loaded chunk queued for reset during server shutdown");
+    }
+
+    private static void testReopenedWorld(MinecraftServer server) {
+        try {
+            var level = server.overworld();
+            var chunk = level.getChunk(40, 40);
+            check(!chunk.getBlockState(new BlockPos(640, 200, 640)).is(Blocks.DIAMOND_BLOCK), "selected player construction removed after regeneration");
+            check(level.getBlockState(new BlockPos(656, 200, 640)).is(Blocks.EMERALD_BLOCK), "neighbor construction preserved after regeneration");
+            int ores = 0;
+            var pos = new BlockPos.MutableBlockPos();
+            for (int x = 640; x < 656; x++) for (int z = 640; z < 656; z++) {
+                for (int y = level.getMinY(); y <= level.getMaxY(); y++) {
+                    pos.set(x, y, z);
+                    String block = BuiltInRegistries.BLOCK.getKey(chunk.getBlockState(pos).getBlock()).getPath();
+                    if (block.endsWith("_ore") || block.equals("raw_iron_block") || block.equals("raw_copper_block")) ores++;
+                }
+            }
+            check(ores == 0, "reopened chunk regenerated with the new ore rules");
+            RESULTS.add("PASS: selected construction removed, old chunk regenerated with zero ores, neighboring construction preserved after reopening the world");
+            Files.writeString(Path.of("reopen-test-results.txt"), String.join("\n", RESULTS) + "\nREGENERATION_PASSED\n");
+        } catch (Throwable error) {
+            try { Files.writeString(Path.of("reopen-test-results.txt"), RESULTS + "FAIL " + error); } catch (Exception ignored) {}
+            throw new IllegalStateException(error);
+        } finally { server.halt(false); }
     }
 
     private static void testRules(ServerLevel level) throws Exception {

@@ -3,6 +3,8 @@ package fi.dy.masa.orecontrol.config;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -13,13 +15,13 @@ public final class Configs {
     public static final Map<String, String> OPTIONS;
     private static final Pattern CATEGORY = Pattern.compile("\\\"?([A-Za-z]+)\\\"?\\s*\\{");
     private static final Pattern BOOLEAN = Pattern.compile("B:([A-Za-z0-9_]+)\\s*=\\s*(true|false)", Pattern.CASE_INSENSITIVE);
-    private static volatile Configs master = new Configs(Map.of());
-    private static volatile Map<String, Configs> dimensions = Map.of();
+    private record Snapshot(Configs master, Map<String, Configs> dimensions) {}
+    private static volatile Snapshot snapshot = new Snapshot(new Configs(Map.of()), Map.of());
     private final Map<String, Boolean> values;
 
     static {
         Map<String, String> options = new LinkedHashMap<>();
-        options.put("Generic", "enablePerDimensionConfigs");
+        options.put("Generic", "enablePerDimensionConfigs allowExistingChunkRebuild");
         options.put("Minable", "disableAllVanillaGeneration disableCOAL disableDIAMOND disableDIRT disableGOLD disableGRAVEL disableIRON disableLAPIS disableREDSTONE disableQUARTZ disableDIORITE disableGRANITE disableANDESITE disableEMERALD disableSILVERFISH disableCUSTOM disableCOPPER disableANCIENT_DEBRIS");
         options.put("Decorate", "disableBIG_SHROOM disableCACTUS disableCLAY disableDEAD_BUSH disableDESERT_WELL disableLILYPAD disableFLOWERS disableFOSSIL disableGRASS disableICE disableLAKE_WATER disableLAKE_LAVA disablePUMPKIN disableREED disableROCK disableSAND disableSAND_PASS2 disableSHROOM disableTREE disableCUSTOM");
         options.put("Populate", "disableDUNGEON disableFIRE disableGLOWSTONE disableICE disableLAKE disableLAVA disableNETHER_LAVA disableNETHER_LAVA2 disableNETHER_MAGMA disableANIMALS disableCUSTOM");
@@ -40,7 +42,72 @@ public final class Configs {
     }
 
     public static Configs get(String dimension) {
-        return dimensions.getOrDefault(dimension, master);
+        Snapshot current = snapshot;
+        return current.dimensions.getOrDefault(dimension, current.master);
+    }
+
+    public static Configs master() { return snapshot.master; }
+
+    public Map<String, Boolean> settings() {
+        Map<String, Boolean> result = new LinkedHashMap<>();
+        OPTIONS.forEach((category, keys) -> {
+            for (String key : keys.split(" ")) result.put(category + "." + key, enabled(category, key));
+        });
+        return result;
+    }
+
+    public static void write(Path file, Map<String, Boolean> values) throws IOException {
+        StringBuilder text = new StringBuilder("# Ore Control. true disables generation except Generic options.\n\n");
+        for (var entry : OPTIONS.entrySet()) {
+            text.append(entry.getKey()).append(" {\n");
+            for (String key : entry.getValue().split(" ")) {
+                text.append("    B:").append(key).append('=').append(values.getOrDefault(entry.getKey() + "." + key, false)).append('\n');
+            }
+            text.append("}\n\n");
+        }
+        Files.createDirectories(file.toAbsolutePath().getParent());
+        Path temporary = Files.createTempFile(file.toAbsolutePath().getParent(), "orecontrol-", ".tmp");
+        try {
+            Files.writeString(temporary, text);
+            try {
+                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    public static synchronized void saveSettings(Path directory, Map<String, Boolean> masterValues,
+                                                 String dimension, Map<String, Boolean> dimensionValues) throws IOException {
+        Map<String, Boolean> nextMaster = new LinkedHashMap<>(masterValues);
+        Map<Path, byte[]> originals = new LinkedHashMap<>();
+        Path main = directory.resolve("orecontrol.cfg");
+        originals.put(main, Files.exists(main) ? Files.readAllBytes(main) : null);
+        Path perDimension = null;
+        if (dimension != null) {
+            if (!dimension.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")) throw new IOException("Invalid dimension id");
+            String[] id = dimension.split(":", 2);
+            Path root = directory.resolve("dimensions").toAbsolutePath().normalize();
+            perDimension = root.resolve(id[0]).resolve(id[1] + ".cfg").normalize();
+            if (!perDimension.startsWith(root)) throw new IOException("Invalid dimension path");
+            originals.put(perDimension, Files.exists(perDimension) ? Files.readAllBytes(perDimension) : null);
+            nextMaster.put("Generic.enablePerDimensionConfigs", true);
+        }
+        try {
+            write(main, nextMaster);
+            if (perDimension != null) write(perDimension, dimensionValues);
+            load(directory);
+        } catch (IOException error) {
+            for (var original : originals.entrySet()) {
+                try {
+                    if (original.getValue() == null) Files.deleteIfExists(original.getKey());
+                    else Files.write(original.getKey(), original.getValue());
+                } catch (IOException restoreError) { error.addSuppressed(restoreError); }
+            }
+            throw error;
+        }
     }
 
     public static synchronized void load(Path directory) throws IOException {
@@ -68,8 +135,7 @@ public final class Configs {
                 }
             }
         }
-        dimensions = Map.copyOf(nextDimensions);
-        master = nextMaster;
+        snapshot = new Snapshot(nextMaster, Map.copyOf(nextDimensions));
     }
 
     public static Configs read(Path file) throws IOException {
@@ -93,15 +159,7 @@ public final class Configs {
         boolean missing = OPTIONS.entrySet().stream().anyMatch(entry ->
                 java.util.Arrays.stream(entry.getValue().split(" ")).anyMatch(key -> !values.containsKey(entry.getKey() + "." + key)));
         if (missing) {
-            StringBuilder text = new StringBuilder("# Ore Control Fabric 26.1.2. true disables the corresponding generation.\n# Per-dimension files fully override the master settings, as in the original mod.\n\n");
-            for (var entry : OPTIONS.entrySet()) {
-                text.append(entry.getKey()).append(" {\n");
-                for (String key : entry.getValue().split(" ")) {
-                    text.append("    B:").append(key).append('=').append(values.getOrDefault(entry.getKey() + "." + key, false)).append('\n');
-                }
-                text.append("}\n\n");
-            }
-            Files.writeString(file, text);
+            write(file, values);
         }
         return new Configs(values);
     }

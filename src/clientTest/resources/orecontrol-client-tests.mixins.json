@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "fi.dy.masa.orecontrol.clienttest.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["ClientTestMixin"],
+  "injectors": {"defaultRequire": 1}
+}
