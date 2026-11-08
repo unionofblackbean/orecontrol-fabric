@@ -75,6 +75,29 @@ public final class ClientChecks {
                     press(client.screen, "保存并应用");
                     check(!Configs.get(client.level.dimension().identifier().toString()).disabled("Stages", "ALL"), "bulk stage allowing saved");
                     client.setScreen(new OreControlConfigScreen(new TitleScreen()));
+                    press(client.screen, "结构");
+                    stage = 10; wait = 25;
+                }
+                case 10 -> {
+                    capture(client, "structures-zh.png");
+                    press(client.screen, "废弃矿井");
+                    press(client.screen, "试炼密室");
+                    press(client.screen, "村庄");
+                    press(client.screen, "保存并应用");
+                    var config = Configs.get(client.level.dimension().identifier().toString());
+                    check(config.disabled("Structures", "MINESHAFT") && config.disabled("Structures", "TRIAL_CHAMBERS")
+                            && config.disabled("Structures", "VILLAGE"), "mineshaft, trial and village buttons saved");
+                    client.setScreen(new OreControlConfigScreen(new TitleScreen()));
+                    press(client.screen, "结构");
+                    press(client.screen, "本类全部禁止");
+                    press(client.screen, "保存并应用");
+                    check(Configs.get(client.level.dimension().identifier().toString()).disabled("Structures", "ALL"), "bulk structure blocking saved");
+                    client.setScreen(new OreControlConfigScreen(new TitleScreen()));
+                    press(client.screen, "结构");
+                    press(client.screen, "本类全部允许");
+                    press(client.screen, "保存并应用");
+                    check(!Configs.get(client.level.dimension().identifier().toString()).disabled("Structures", "ALL"), "bulk structure allowing saved");
+                    client.setScreen(new OreControlConfigScreen(new TitleScreen()));
                     press(client.screen, "表层");
                     stage = 9; wait = 25;
                 }

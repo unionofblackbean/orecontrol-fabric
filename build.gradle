@@ -2,7 +2,7 @@ plugins {
     id 'net.fabricmc.fabric-loom' version '1.17.21'
 }
 group = 'fi.dy.masa.orecontrol'
-version = '1.1.0+mc26.1.2'
+version = '1.2.0+mc26.1.2'
 base { archivesName = 'orecontrol-fabric' }
 repositories { maven { url = 'https://maven.terraformersmc.com/releases/' } }
 dependencies {
@@ -43,6 +43,12 @@ loom {
             runDir 'build/integration-run'
             vmArg '-Dorecontrol.reopenTest=true'
         }
+        structureServer {
+            server()
+            source sourceSets.integration
+            runDir 'build/structure-run'
+            vmArg '-Dorecontrol.structureTest=true'
+        }
     }
 }
 tasks.named('runRegenerationServer') {
@@ -76,6 +82,7 @@ loom {
 }
 tasks.named('runClientTest') {
     dependsOn 'runRegenerationServer'
+    dependsOn 'runStructureServer'
     doFirst {
         def run = file('build/client-run')
         run.mkdirs()
@@ -92,6 +99,35 @@ tasks.named('runClientTest') {
     doLast {
         def result = file('build/client-run/client-test-results.txt')
         if (!result.exists() || !result.text.contains('ALL_CLIENT_CHECKS_PASSED')) throw new GradleException('Client UI checks failed')
+    }
+}
+
+tasks.named('runStructureServer') {
+    doFirst {
+        def run = file('build/structure-run')
+        run.mkdirs()
+        new File(run, 'eula.txt').text = 'eula=true\n'
+        new File(run, 'structure-test-results.txt').delete()
+        def config = new File(run, 'config/orecontrol/orecontrol.cfg')
+        config.parentFile.mkdirs()
+        config.text = ''
+        def world = 'structures-' + System.currentTimeMillis()
+        new File(run, 'server.properties').text = 'online-mode=false\nserver-ip=127.0.0.1\nserver-port=0\nlevel-seed=424242\ngenerate-structures=true\nmax-tick-time=-1\nview-distance=2\nsimulation-distance=2\nlevel-name=' + world + '\n'
+        def pack = new File(run, world + '/datapacks/structure-tests')
+        def json = { String path, Object value ->
+            def target = new File(pack, path)
+            target.parentFile.mkdirs()
+            target.text = groovy.json.JsonOutput.toJson(value)
+        }
+        json('pack.mcmeta', [pack: [description: 'Ore Control structure fixtures', min_format: [101, 1], max_format: [101, 1]]])
+        ['village': 'village_plains', 'mineshaft': 'mineshaft', 'trial': 'trial_chambers'].each { name, structure ->
+            json('data/fixtures/worldgen/structure_set/' + name + '.json', [structures: [[structure: 'minecraft:' + structure, weight: 1]], placement: [type: 'minecraft:random_spread', spacing: 32, separation: 8, salt: 10387312]])
+            json('data/fixtures/dimension/' + name + '.json', [type: 'minecraft:overworld', generator: [type: 'minecraft:flat', settings: [biome: 'minecraft:plains', features: false, lakes: false, structure_overrides: ['fixtures:' + name], layers: [[height: 1, block: 'minecraft:bedrock'], [height: 124, block: 'minecraft:stone'], [height: 3, block: 'minecraft:dirt'], [height: 1, block: 'minecraft:grass_block']]]]])
+        }
+    }
+    doLast {
+        def result = file('build/structure-run/structure-test-results.txt')
+        if (!result.exists() || !result.text.contains('ALL_STRUCTURE_CHECKS_PASSED')) throw new GradleException('Structure checks failed')
     }
 }
 tasks.named('runIntegrationServer') {

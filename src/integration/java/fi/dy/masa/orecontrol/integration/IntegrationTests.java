@@ -40,6 +40,7 @@ public final class IntegrationTests {
     private static final Path CONFIG = FabricLoader.getInstance().getConfigDir().resolve("orecontrol");
 
     public static void run(MinecraftServer server) {
+        if (Boolean.getBoolean("orecontrol.structureTest")) { StructureChecks.run(server); return; }
         if (Boolean.getBoolean("orecontrol.reopenTest")) { testReopenedWorld(server); return; }
         try {
             Files.deleteIfExists(Path.of("test-results.txt"));

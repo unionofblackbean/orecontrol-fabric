@@ -1,6 +1,6 @@
 # Ore Control — Fabric 26.1.2
 
-通过游戏内按钮控制矿物、植被、湖泊和其他世界装饰，也可以选择已有区块，备份后按新的规则重新生成。
+通过游戏内按钮控制矿物、植被、湖泊、大型结构和其他世界装饰，也可以选择已有区块，备份后按新的规则重新生成。
 
 这是 masa 的 Ore Control 0.4.3 的非官方移植，保留原项目历史和 LGPL-3.0 许可证。原始提交为 `6323cb359b21406395958f257c10de4298c19cbf`，原项目位于 https://github.com/maruohon/orecontrol 。当前源码与发布位于 https://github.com/unionofblackbean/orecontrol-fabric 。
 
@@ -8,7 +8,7 @@
 
 需要 Minecraft Java 26.1.2、Java 25、Fabric Loader 0.18.4 或更新兼容版本。
 
-1. 从本仓库 Releases 下载 `orecontrol-fabric-1.1.0+mc26.1.2.jar`，用它替换实例 `mods` 文件夹里的旧版 Ore Control JAR。
+1. 从本仓库 Releases 下载 `orecontrol-fabric-1.2.0+mc26.1.2.jar`，用它替换实例 `mods` 文件夹里的旧版 Ore Control JAR。
 2. 要使用游戏内界面，在同一个客户端安装适配 26.1.2 的 [Mod Menu](https://modrinth.com/mod/modmenu)，已实测 Mod Menu 18.0.2。
 3. 启动游戏，进入世界，按 Esc 打开模组菜单，选择 Ore Control，再点击配置按钮。也可以从主菜单的模组列表打开配置界面。
 
@@ -16,7 +16,7 @@ Ore Control 本体无需单独安装 Fabric API。Mod Menu 有自己的依赖，
 
 ## 用按钮控制世界装饰
 
-界面提供“装饰”“矿物”“填充”“阶段”“表层”“其他”“高级”七个分类，项目较多时通过左右箭头翻页。
+界面提供“装饰”“矿物”“填充”“结构”“阶段”“表层”“其他”“高级”八个分类，项目较多时通过左右箭头翻页。
 
 - 点击项目按钮，在“允许”和“禁止”之间切换。泥土团块、树木、草和蕨、花、蘑菇、矿石、泉水等都可分别设置。
 - 点击“保存并应用”后，规则立即用于后续的生成步骤。点击“取消”会放弃尚未保存的编辑。
@@ -24,6 +24,29 @@ Ore Control 本体无需单独安装 Fabric API。Mod Menu 有自己的依赖，
 - 在本机世界内，顶部按钮可以切换“全局设置”和“当前维度”。保存当前维度的编辑会自动启用独立维度配置。
 
 ![游戏内中文配置界面](docs/images/settings-zh.png)
+
+## 1.2.0 的大型结构控制
+
+进入“结构”分类，将“废弃矿井（人工矿道）”“试炼密室（试炼大厅）”或“村庄（全部群系）”切换为“禁止”，再点击“保存并应用”。要同时关闭所有大型结构，将“全部大型结构”设为“禁止”。“本类全部禁止”还会将所有单项开关一起设为禁止。
+
+按实际结构注册表审计的 **34 个原版结构 ID** 全部有对应开关，详见[结构覆盖对照表](docs/structure-audit-26.1.2.md)。
+
+| 分组 | 控制内容 |
+| --- | --- |
+| 矿井、试炼密室、村庄 | 普通与恶地矿井、试炼密室，以及平原、沙漠、雪原、针叶林和热带草原村庄 |
+| 地下遗迹 | 远古城市、古迹废墟、要塞 |
+| 地表建筑 | 沙漠神殿、丛林神庙、雪屋、沼泽小屋、林地府邸、掠夺者前哨站 |
+| 海洋遗迹 | 海底神殿、冷水与暖水海底废墟、海中与搁浅沉船、埋藏的宝藏 |
+| 下界与末地 | 全部废弃传送门变体、下界要塞、堡垒遗迹、下界化石、末地城 |
+| 自定义结构 | 模组或数据包自有命名空间、通过原版 Structure 管线生成的结构 |
+
+关闭后会阻止新结构起点的创建、周边结构引用的新增，以及已有结构向后续区块放置部件。定位指令和探险地图查询也会排除被禁止的结构，包括已有结构起点。重新允许后，这些查询恢复使用原有规则。
+
+保存开关后，已放置的建筑方块会继续保留。要移除旧建筑，请按下文选择覆盖建筑完整范围的旧区块并重建。新增结构开关默认允许，升级后请主动设置。
+
+“阶段 → 全部地物”控制地物装饰，“结构 → 全部大型结构”控制大型结构生成。若希望两类都关闭，请同时设置这两个总开关。世界自身的“生成结构”设置也参与控制。
+
+![大型结构开关](docs/images/structures-zh.png)
 
 ## 1.1.0 的高版本地物补全
 
@@ -72,7 +95,7 @@ Ore Control 本体无需单独安装 Fabric API。Mod Menu 有自己的依赖，
 
 ![表层生成开关](docs/images/surface-zh.png)
 
-阶段开关作用于 PlacedFeature，不会删除基础山体、洞穴或天然海水，也不会关闭村庄等大型 Structure 的独立生成。出生奖励箱、玩家使用骨粉或树苗、指令放置、末影龙重生等 ServerLevel 直接入口继续使用原有规则。结构内部单独放置的方块也不等同于自然地物。
+阶段开关作用于 PlacedFeature。村庄等大型 Structure 使用“结构”分类控制，基础山体、洞穴和天然海水由地形生成决定。出生奖励箱、玩家使用骨粉或树苗、指令放置、末影龙重生等 ServerLevel 直接入口继续使用原有规则。结构内部单独放置的方块由结构开关整体控制。
 
 已存在的树木、矿石和土层不会仅因保存规则就被移除。请探索未生成的区块，或者使用下面的选区重建功能。
 
@@ -106,7 +129,7 @@ Ore Control 本体无需单独安装 Fabric API。Mod Menu 有自己的依赖，
 
 ## CFG 配置与旧版兼容
 
-首次启动生成 `config/orecontrol/orecontrol.cfg`。旧版配置键和默认值继续支持，`Generic.allowExistingChunkRebuild` 默认值为 false。新增的地物、阶段和表层开关也均默认为 false，表示允许生成。除 Generic 分类的功能开关外，`B:disable…=true` 表示禁止相应生成，false 表示允许。
+首次启动生成 `config/orecontrol/orecontrol.cfg`。旧版配置键和默认值继续支持，`Generic.allowExistingChunkRebuild` 默认值为 false。新增的地物、结构、阶段和表层开关也均默认为 false，表示允许生成。除 Generic 分类的功能开关外，`B:disable…=true` 表示禁止相应生成，false 表示允许。
 
 通过游戏界面保存会立即生效。手动编辑配置文件后，请重启服务器，或退出单人世界再重新进入以加载文件。
 
@@ -129,6 +152,8 @@ Ore Control 本体无需单独安装 Fabric API。Mod Menu 有自己的依赖，
 | Populate | ICE / ANIMALS | 地形生成时的冻结与积雪、区块初始动物生成 |
 | Populate | LAKE / LAVA | 水湖地物、熔岩湖地物 |
 | Populate | NETHER_LAVA / NETHER_LAVA2 / NETHER_MAGMA | 下界开放熔岩泉、封闭熔岩泉、岩浆块团块 |
+| Structures | MINESHAFT / TRIAL_CHAMBERS / VILLAGE | 废弃矿井、试炼密室、全部村庄变体 |
+| Structures | ALL / CUSTOM | 全部大型结构、模组与数据包命名空间结构，完整单项见结构对照表 |
 | Custom | disableSurfaceLavaLakes | 阻止海平面以上或距地表不足 8 格的熔岩湖，允许地下熔岩湖 |
 
 除了明确写全的键名，其余后缀前都添加 `disable`，例如 `B:disableTREE=true`。
@@ -160,7 +185,7 @@ Fabric 没有 Forge 1.12.2 的 CUSTOM 事件。`Minable.disableCUSTOM` 控制模
 
 ## 版本命名
 
-版本采用 `主版本.次版本.修订号+mc游戏版本`，当前版本为 `1.1.0+mc26.1.2`。对应 Git 标签为 `v1.1.0+mc26.1.2`，成品文件为 `orecontrol-fabric-1.1.0+mc26.1.2.jar`。后续修复递增修订号，兼容性功能更新递增次版本。历史 `port.*` 发布保留用于追溯。
+版本采用 `主版本.次版本.修订号+mc游戏版本`，当前版本为 `1.2.0+mc26.1.2`。对应 Git 标签为 `v1.2.0+mc26.1.2`，成品文件为 `orecontrol-fabric-1.2.0+mc26.1.2.jar`。后续修复递增修订号，兼容性功能更新递增次版本。历史 `port.*` 发布保留用于追溯。
 
 ## 构建与测试
 
@@ -169,6 +194,7 @@ Fabric 没有 Forge 1.12.2 的 CUSTOM 事件。`Minable.disableCUSTOM` 控制模
 ```powershell
 .\gradlew.bat build
 .\gradlew.bat runRegenerationServer
+.\gradlew.bat runStructureServer
 .\gradlew.bat runClientTest
 ```
 
@@ -176,13 +202,15 @@ Fabric 没有 Forge 1.12.2 的 CUSTOM 事件。`Minable.disableCUSTOM` 控制模
 
 `runRegenerationServer` 会执行服务端测试，保存、备份并重建一个真实区块，再重新打开存档，验证新规则生效及相邻建筑保留。服务端测试结果位于 `build/integration-run/test-results.txt` 与 `reopen-test-results.txt`。
 
-`runClientTest` 会先执行服务端测试，再复制测试世界，使用真实客户端检查 Mod Menu 配置入口、按钮草稿、取消、保存、独立维度编辑、覆盖开关、确认界面及退出世界重建。结果位于 `build/client-run/client-test-results.txt`，截图位于同目录的 `screenshots/`。
+`runStructureServer` 使用开启结构生成的独立测试世界，逐项审计所有原版结构 ID，并在三个独立维度中实际生成村庄、矿井和试炼密室作为阳性对照，验证关闭后起点与引用阻断、旧结构部件拦截、定位过滤、独立维度覆盖和全部结构总开关。结果与对照表位于 `build/structure-run/structure-test-results.txt` 和 `structure-audit.md`。
+
+`runClientTest` 会先执行全部服务端测试，再复制测试世界，使用真实客户端检查 Mod Menu 配置入口、按钮草稿、取消、保存、独立维度编辑、三种结构按钮与批量开关、覆盖开关、确认界面及退出世界重建。结果位于 `build/client-run/client-test-results.txt`，截图位于同目录的 `screenshots/`。
 
 审计测试从当前游戏 Registry 获取原版条目，并验证 11 个阶段的独立性。四个测试维度复用原版竹林、森林、海洋和暖水海洋的地物，使用平坦基底建立稳定阳性对照，额外增加珊瑚、海泡菜、丛林树木与苔藓植被的尝试次数。测试会检查各水生植物与竹子单项关闭、植被阶段整体关闭、地下泥土与泥土表层的区别，并验证树木附带藤蔓/落叶和苔藓混合草的关闭效果。审计报告输出到 `build/integration-run/worldgen-audit.md`。
 
 测试使用独立的 `build` 目录和源代码集，测试模组不会进入成品 JAR。自动测试服务器会写入 `eula=true`，仅绑定本机并使用随机端口。运行前请确认你已接受 Minecraft EULA。客户端测试需要可用的图形环境。
 
-已在 Loader 0.18.4 和 0.20.1 上分别通过服务端集成测试与重新进入存档后的重建测试，并在 Loader 0.18.4 + Mod Menu 18.0.2 的真实客户端完成界面操作测试和截图核对。
+已在 Loader 0.18.4 和 0.20.1 上分别通过结构生成、服务端集成测试与重新进入存档后的重建测试，并在 Loader 0.18.4 + Mod Menu 18.0.2 的真实客户端完成界面操作测试和截图核对。
 
 Loader 0.18.4 的旧 Mixin 子系统会输出 JAVA_25 兼容级别提示。第三方世界生成模组的全部组合尚未逐一验证。
 

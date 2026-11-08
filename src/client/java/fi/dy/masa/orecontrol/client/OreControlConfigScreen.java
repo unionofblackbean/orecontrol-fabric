@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class OreControlConfigScreen extends Screen {
-    private static final List<String> CATEGORIES = List.of("Decorate", "Minable", "Populate", "Stages", "Surface", "Custom", "Generic");
+    private static final List<String> CATEGORIES = List.of("Decorate", "Minable", "Populate", "Structures", "Stages", "Surface", "Custom", "Generic");
     private final Screen parent;
     private final Map<String, Boolean> master = new LinkedHashMap<>(Configs.master().settings());
     private final Map<String, Boolean> dimensionSettings;
@@ -107,7 +107,7 @@ public final class OreControlConfigScreen extends Screen {
         boolean value = draft().getOrDefault(section + "." + key, false);
         Component state = Component.translatable((section.equals("Generic") || section.equals("Custom"))
                 ? (value ? "orecontrol.on" : "orecontrol.off") : (value ? "orecontrol.disabled" : "orecontrol.allowed"));
-        String prefix = section.equals("Stages") || section.equals("Surface") || (section.equals("Minable") && key.equals("disableCLAY"))
+        String prefix = section.equals("Stages") || section.equals("Surface") || section.equals("Structures") || (section.equals("Minable") && key.equals("disableCLAY"))
                 ? "orecontrol.setting." + section + "." : "orecontrol.setting.";
         return Component.translatable("orecontrol.option", Component.translatable(prefix + key), state);
     }
@@ -135,7 +135,8 @@ public final class OreControlConfigScreen extends Screen {
         super.extractRenderState(graphics, x, y, delta);
         graphics.centeredText(font, title, width / 2, 12, 0xFFFFFFFF);
         graphics.centeredText(font, Component.translatable(minecraft.level != null && minecraft.getSingleplayerServer() == null
-                ? "orecontrol.remote.help" : CATEGORIES.get(category).equals("Stages") ? "orecontrol.stages.help" : "orecontrol.help"), width / 2, height - 53, 0xFFAAAAAA);
+                ? "orecontrol.remote.help" : CATEGORIES.get(category).equals("Stages") ? "orecontrol.stages.help"
+                : CATEGORIES.get(category).equals("Structures") ? "orecontrol.structures.help" : "orecontrol.help"), width / 2, height - 53, 0xFFAAAAAA);
         if (!status.isEmpty()) graphics.centeredText(font, status, width / 2, height - 40, 0xFFFF7777);
         if (dimensionTarget && CATEGORIES.get(category).equals("Generic")) {
             graphics.centeredText(font, Component.translatable("orecontrol.global_only"), width / 2, 90, 0xFFAAAAAA);

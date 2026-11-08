@@ -29,6 +29,7 @@ public final class Configs {
         options.put("Custom", "disableSurfaceLavaLakes");
         options.put("Stages", "disableALL disableRAW_GENERATION disableLAKES disableLOCAL_MODIFICATIONS disableUNDERGROUND_STRUCTURES disableSURFACE_STRUCTURES disableSTRONGHOLDS disableUNDERGROUND_ORES disableUNDERGROUND_DECORATION disableFLUID_SPRINGS disableVEGETAL_DECORATION disableTOP_LAYER_MODIFICATION");
         options.put("Surface", "disableDIRT disableFROZEN_OCEAN disableBADLANDS_PILLARS");
+        options.put("Structures", "disableALL disableMINESHAFT disableTRIAL_CHAMBERS disableVILLAGE disableANCIENT_CITY disableTRAIL_RUINS disableSTRONGHOLD disableDESERT_PYRAMID disableJUNGLE_PYRAMID disableIGLOO disableSWAMP_HUT disableMANSION disablePILLAGER_OUTPOST disableMONUMENT disableOCEAN_RUIN disableSHIPWRECK disableBURIED_TREASURE disableRUINED_PORTAL disableFORTRESS disableBASTION_REMNANT disableNETHER_FOSSIL disableEND_CITY disableCUSTOM");
         OPTIONS = Collections.unmodifiableMap(options);
     }
 
